@@ -1,3 +1,5 @@
+Reference: https://github.com/lippserd/docker-compose-icinga
+
 # docker-compose Icinga stack
 
 docker-compose configuration to start-up an Icinga stack containing
