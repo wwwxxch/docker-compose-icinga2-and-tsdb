@@ -1,7 +1,6 @@
-version: '3.7'
+# version: '3.7'
 
-x-icinga-db-web-config:
-  &icinga-db-web-config
+x-icinga-db-web-config: &icinga-db-web-config
   icingaweb.modules.icingadb.config.icingadb.resource: icingadb
   icingaweb.modules.icingadb.redis.redis1.host: icingadb-redis
   icingaweb.modules.icingadb.redis.redis1.port: 6379
@@ -18,8 +17,7 @@ x-icinga-db-web-config:
   icingaweb.resources.icingadb.type: db
   icingaweb.resources.icingadb.username: icingadb
 
-x-icinga-director-config:
-  &icinga-director-config
+x-icinga-director-config: &icinga-director-config
   icingaweb.modules.director.config.db.resource: director-mysql
   icingaweb.modules.director.kickstart.config.endpoint: icinga2
   icingaweb.modules.director.kickstart.config.host: icinga2
@@ -34,8 +32,7 @@ x-icinga-director-config:
   icingaweb.resources.director-mysql.type: db
   icingaweb.resources.director-mysql.username: director
 
-x-icinga-web-config:
-  &icinga-web-config
+x-icinga-web-config: &icinga-web-config
   icingaweb.authentication.icingaweb2.backend: db
   icingaweb.authentication.icingaweb2.resource: icingaweb-mysql
   icingaweb.config.global.config_backend: db
@@ -53,16 +50,14 @@ x-icinga-web-config:
   icingaweb.resources.icingaweb-mysql.type: db
   icingaweb.resources.icingaweb-mysql.username: icingaweb
   icingaweb.roles.Administrators.groups: Administrators
-  icingaweb.roles.Administrators.permissions: '*'
+  icingaweb.roles.Administrators.permissions: "*"
   icingaweb.roles.Administrators.users: icingaadmin
 
-x-icinga2-environment:
-  &icinga2-environment
+x-icinga2-environment: &icinga2-environment
   ICINGA_CN: icinga2
   ICINGA_MASTER: 1
 
-x-logging:
-  &default-logging
+x-logging: &default-logging
   driver: "json-file"
   options:
     max-file: "10"
@@ -73,6 +68,39 @@ networks:
     name: icinga-playground
 
 services:
+  # VictoriaMetrics
+  vmagent:
+    image: victoriametrics/vmagent:v1.102.1
+    container_name: vmagent
+    command: -remoteWrite.url=http://vminsert:8480/insert/0/prometheus/
+    ports:
+      - "8429:8429"
+  vminsert:
+    image: victoriametrics/vminsert:v1.102.1-cluster
+    container_name: vminsert
+    command: -storageNode=vmstorage
+    ports:
+      - "8480:8480"
+  vmstorage:
+    image: victoriametrics/vmstorage:v1.102.1-cluster
+    container_name: vmstorage
+    command: -retentionPeriod=1d
+    ports:
+      - "8482:8482"
+  vmselect:
+    image: victoriametrics/vmselect:v1.102.1-cluster
+    container_name: vmselect
+    command: -storageNode=vmstorage
+    ports:
+      - "8481:8481"
+  
+  # InfluxDB
+  influxdb:
+    image: influxdb:1.8.2
+    ports:
+      - "8086:8086"
+    command: ["influxd", "-config", "/etc/influxdb/influxdb.conf"]
+
   director:
     command:
       - /bin/bash
@@ -96,7 +124,7 @@ services:
   # The Icinga 2 docker image does not support configuration via env vars at the moment.
   # So, we have to ship some configs with this little init container. Referenced in depends_on of the icinga2 service.
   init-icinga2:
-    command: [ "/config/init-icinga2.sh" ]
+    command: ["/config/init-icinga2.sh"]
     environment: *icinga2-environment
     image: icinga/icinga2
     logging: *default-logging
@@ -107,7 +135,7 @@ services:
       - ./init-icinga2.sh:/config/init-icinga2.sh
 
   icinga2:
-    command: [ "sh", "-c", "sleep 5 ; icinga2 daemon" ]
+    command: ["sh", "-c", "sleep 5 ; icinga2 daemon"]
     depends_on:
       - icingadb-redis
       - init-icinga2
@@ -119,6 +147,7 @@ services:
     volumes:
       - icinga2:/data
       - ./icinga2.conf.d:/custom_data/custom.conf.d
+      - ./icinga2.conf.d/influxdb.conf:/etc/icinga2/features-available/influxdb.conf
 
   icingadb:
     environment:
